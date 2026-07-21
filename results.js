@@ -55,12 +55,13 @@
           <table>
             <thead>
               <tr>
-                <th>Location</th>
-                <th>Title</th>
+                <th>Location Name</th>
+                <th>Address</th>
+                <th>City</th>
+                <th>State</th>
                 <th>Country</th>
                 <th>Phone</th>
                 <th>Source URL</th>
-                <th>Status</th>
               </tr>
             </thead>
             <tbody id="resultsBody"></tbody>
@@ -83,12 +84,13 @@
      names may vary.
      ----------------------------------------------------------- */
   const FIELD_MAP = {
-    location: ["location", "name", "branch", "locationname", "locationName"],
-    title:    ["title", "role", "label"],
+    location: ["location_name", "location", "name", "branch", "locationname"],
+    address:  ["address", "street", "streetaddress"],
+    city:     ["city", "town"],
+    state:    ["state", "province"],
     country:  ["country", "region"],
-    phone:    ["phone", "phonenumber", "phoneNumber", "contactnumber", "contactNumber"],
-    src:      ["sourceurl", "sourceUrl", "source", "src", "url", "website"],
-    status:   ["status", "confidence"]
+    phone:    ["phone", "phonenumber", "contactnumber"],
+    src:      ["source_url", "sourceurl", "source", "src", "url", "website"]
   };
 
   function pick(row, keys) {
@@ -101,53 +103,98 @@
     return "—";
   }
 
-  /** Try to JSON.parse a string; return null if it isn't valid JSON. */
+  /**
+   * Pulls JSON out of a string that may be:
+   *   - plain JSON ("[{...}]" or "{...}")
+   *   - JSON wrapped in a markdown code fence (```json ... ```),
+   *     possibly with prose text before and/or after it — this is
+   *     how chat/agent-style responses commonly answer.
+   * Returns the parsed value, or null if nothing parseable was found.
+   */
   function tryParseJson(str) {
     if (typeof str !== "string") return null;
+
+    // 1) A ```json ... ``` (or plain ``` ... ```) fenced block anywhere in the text
+    const fenced = str.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenced) {
+      try { return JSON.parse(fenced[1].trim()); } catch { /* fall through */ }
+    }
+
+    // 2) The whole string is JSON on its own
     const trimmed = str.trim();
-    if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return null;
-    try { return JSON.parse(trimmed); } catch { return null; }
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try { return JSON.parse(trimmed); } catch { /* fall through */ }
+    }
+
+    // 3) A bracket-balanced [ ... ] array embedded anywhere in the text,
+    //    even without a code fence around it
+    const start = str.indexOf("[");
+    if (start !== -1) {
+      let depth = 0;
+      for (let i = start; i < str.length; i++) {
+        if (str[i] === "[") depth++;
+        else if (str[i] === "]") {
+          depth--;
+          if (depth === 0) {
+            const candidate = str.slice(start, i + 1);
+            try { return JSON.parse(candidate); } catch { /* keep looking */ }
+            break;
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   /**
    * Recursively searches the response for the first array made up of
-   * objects (as opposed to an array of strings/numbers). Handles two
-   * common real-world shapes: the array nested a few levels deep
-   * (e.g. { output: { locations: [...] } }), and the array encoded
-   * as a JSON *string* inside a field (common with chat/agent-style
-   * responses, e.g. { text: "[{...}, {...}]" }).
+   * objects. Also returns any leftover prose text found alongside the
+   * JSON (e.g. a "Coverage Notice" some agents append) so it isn't
+   * silently thrown away.
    */
   function findRowsDeep(node, depth = 0) {
-    if (depth > 6 || node === null || node === undefined) return null;
+    if (depth > 6 || node === null || node === undefined) return { rows: null, note: null };
 
     if (Array.isArray(node)) {
       if (node.length > 0 && typeof node[0] === "object" && node[0] !== null && !Array.isArray(node[0])) {
-        return node;
+        return { rows: node, note: null };
       }
-      return null;
+      return { rows: null, note: null };
     }
 
     if (typeof node === "string") {
       const parsed = tryParseJson(node);
-      if (parsed) return findRowsDeep(parsed, depth + 1);
-      return null;
+      if (parsed) {
+        const inner = findRowsDeep(parsed, depth + 1);
+        if (inner.rows) {
+          // Anything in the string after the JSON block is likely a trailing note
+          const fenceEnd = node.lastIndexOf("```");
+          let note = null;
+          if (fenceEnd !== -1) {
+            const after = node.slice(fenceEnd + 3).trim();
+            if (after.length > 5) note = after.replace(/^-+\s*/, "").replace(/^#+\s*/, "");
+          }
+          return { rows: inner.rows, note };
+        }
+      }
+      return { rows: null, note: null };
     }
 
     if (typeof node === "object") {
-      // Prefer keys that sound like a results list
       const priorityKeys = ["locations", "data", "results", "rows", "items", "value", "output", "outputs"];
       for (const key of priorityKeys) {
         if (key in node) {
           const found = findRowsDeep(node[key], depth + 1);
-          if (found) return found;
+          if (found.rows) return found;
         }
       }
       for (const key of Object.keys(node)) {
         const found = findRowsDeep(node[key], depth + 1);
-        if (found) return found;
+        if (found.rows) return found;
       }
     }
-    return null;
+    return { rows: null, note: null };
   }
 
   /** Flatten a single object's own properties into a flat {key: value} map for display/export when no row list was found. */
@@ -179,6 +226,7 @@
   const exportBtn = document.getElementById("exportBtn");
 
   let rows = null;          // array of row objects, when we found one
+  let note = null;          // any leftover context text (e.g. "Coverage Notice")
   let flatFallback = null;  // { key: value } map, when we only got a single object
   let payload = null;
 
@@ -226,25 +274,33 @@
     showEmpty("No extraction has been run yet. Go to Home and select a website to extract.");
   } else {
     payload = JSON.parse(rawData);
-    rows = findRowsDeep(payload);
+    const found = findRowsDeep(payload);
+    rows = found.rows;
+    note = found.note;
 
-    document.getElementById("resultsTitle").textContent = "Results for " + site;
+    document.getElementById("resultsTitle").textContent = "Results for " + site + (rows ? ` (${rows.length} found)` : "");
     document.getElementById("resultsFor").textContent = site;
 
     if (rows && rows.length > 0) {
       rows.forEach(r => {
         const tr = document.createElement("tr");
-        const statusVal = pick(r, FIELD_MAP.status);
-        const pillClass = /verif|high|confirm/i.test(String(statusVal)) ? "success" : "amber";
         tr.innerHTML = `
-          <td>${pick(r, FIELD_MAP.location)}</td>
-          <td>${pick(r, FIELD_MAP.title)}</td>
+          <td style="font-weight:600;">${pick(r, FIELD_MAP.location)}</td>
+          <td>${pick(r, FIELD_MAP.address)}</td>
+          <td>${pick(r, FIELD_MAP.city)}</td>
+          <td>${pick(r, FIELD_MAP.state)}</td>
           <td>${pick(r, FIELD_MAP.country)}</td>
           <td>${pick(r, FIELD_MAP.phone)}</td>
-          <td style="color:var(--accent);">${pick(r, FIELD_MAP.src)}</td>
-          <td><span class="pill ${pillClass}">${statusVal === "—" ? "Received" : statusVal}</span></td>`;
+          <td style="color:var(--accent);">${pick(r, FIELD_MAP.src)}</td>`;
         body.appendChild(tr);
       });
+
+      if (note) {
+        const noteBox = document.createElement("div");
+        noteBox.style.cssText = "margin-top:14px; padding:12px 14px; background:var(--amber-dim); border-radius:8px; font-size:12.5px; color:#7a5a12; line-height:1.5;";
+        noteBox.textContent = note;
+        document.querySelector(".content .card").appendChild(noteBox);
+      }
     } else if (payload && typeof payload === "object") {
       renderFallbackCard(payload);
     } else {
@@ -255,10 +311,10 @@
   exportBtn.addEventListener("click", () => {
     let csv;
     if (rows && rows.length > 0) {
-      const header = ["Location", "Title", "Country", "Phone", "Source URL", "Status"].map(csvEscape).join(",");
+      const header = ["Location Name", "Address", "City", "State", "Country", "Phone", "Source URL"].map(csvEscape).join(",");
       const lines = rows.map(r => [
-        pick(r, FIELD_MAP.location), pick(r, FIELD_MAP.title), pick(r, FIELD_MAP.country),
-        pick(r, FIELD_MAP.phone), pick(r, FIELD_MAP.src), pick(r, FIELD_MAP.status)
+        pick(r, FIELD_MAP.location), pick(r, FIELD_MAP.address), pick(r, FIELD_MAP.city),
+        pick(r, FIELD_MAP.state), pick(r, FIELD_MAP.country), pick(r, FIELD_MAP.phone), pick(r, FIELD_MAP.src)
       ].map(csvEscape).join(","));
       csv = [header, ...lines].join("\n");
     } else if (flatFallback) {
