@@ -27,7 +27,9 @@
 
 *{ box-sizing: border-box; }
 html,body{ height:100%; }
-img{ max-width: 100%; height: auto; display: block; }
+img{ max-width: 100% !important; height: auto !important; display: block; }
+.topbar img{ max-height: 28px !important; width: auto !important; }
+.content > img, .content img:not(.tile img){ max-height: 60px !important; max-width: 200px !important; width: auto !important; object-fit: contain !important; }
 body{
   margin:0;
   font-family: var(--sans);
@@ -212,16 +214,16 @@ input{ font-family: inherit; }
 /* ---------- App shell (dashboard / project pages) ---------- */
 .shell{ display:grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
 .sidebar{
-  background: linear-gradient(165deg, #2454B8 0%, #1B3D8F 45%, #10254F 100%);
+  background: linear-gradient(165deg, #2454B8 0%, #1B3D8F 45%, #10254F 100%) !important;
   color:#E4E9F5; padding: 20px 14px; display:flex; flex-direction:column;
   position: sticky; top:0; height:100vh;
 }
 .sidebar .brand{ display:flex; align-items:center; gap:10px; padding: 4px 4px 26px; }
 .sidebar .brand .logo-slot{
   width: 100%; display:flex; align-items:center; gap:10px;
-  height: 32px;
+  height: 32px !important; overflow: hidden !important;
 }
-.sidebar .brand .logo-slot img{ max-height: 100%; max-width: 140px; object-fit: contain; }
+.sidebar .brand .logo-slot img{ max-height: 100% !important; max-width: 140px !important; width: auto !important; object-fit: contain !important; }
 .sidebar .brand .mark{
   width:30px; height:30px; border-radius:8px;
   background: rgba(255,255,255,0.16);
@@ -321,8 +323,8 @@ input{ font-family: inherit; }
 .tile .tile-stat{
   display:flex; align-items:center; gap:5px; font-size:12.5px; color:var(--text-dim); font-weight:600;
 }
-.tile .tile-stat .stat-ico{ width:14px; height:14px; opacity:.7; display:flex; }
-.tile .tile-stat .stat-ico svg{ width:100%; height:100%; }
+.tile .tile-stat .stat-ico{ width:14px !important; height:14px !important; opacity:.7; display:flex; flex-shrink:0; overflow:hidden; }
+.tile .tile-stat .stat-ico svg{ width:100% !important; height:100% !important; max-width:14px !important; max-height:14px !important; }
 
 .tile-cta{
   margin-top:auto; padding-top:14px; border-top:1px solid var(--border);
@@ -331,11 +333,12 @@ input{ font-family: inherit; }
 .tile:hover .tile-cta{ color:#2453d6; }
 
 .tile .tile-icon{
-  width:32px;height:32px;border-radius:7px;
+  width:32px !important; height:32px !important; border-radius:7px;
   display:flex;align-items:center;justify-content:center; margin-bottom:12px;
   background: var(--accent-dim); color: var(--accent);
+  overflow: hidden !important; flex-shrink:0;
 }
-.tile .tile-icon svg{ width:16px; height:16px; }
+.tile .tile-icon svg{ width:16px !important; height:16px !important; max-width:16px !important; max-height:16px !important; }
 
 .tile .tile-delete{
   position:absolute; top:14px; right:14px;
