@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Workflow · Location Discovery Portal</title>
+<link rel="stylesheet" href="../../css/style.css">
+</head>
+<body>
+<script src="../../js/session.js"></script>
+<script>requireSession();</script>
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const params = new URLSearchParams(window.location.search);
+    const projectId = params.get("project");
+    const link = document.getElementById("backToProjectLink");
+    if (link) link.href = projectId ? `../../project.html?id=${projectId}` : "../../dashboard.html";
+
+    // Preserve ?project=ID across the tool's own internal nav links
+    if (projectId) {
+      document.querySelectorAll('.nav-group a.nav-link[href$=".html"]').forEach(a => {
+        const url = new URL(a.getAttribute("href"), window.location.href);
+        url.searchParams.set("project", projectId);
+        a.href = url.pathname.split("/").pop() + url.search;
+      });
+    }
+  });
+</script>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="mark">LD</div>
+      <div class="name">Location Discovery<small>Portal</small></div>
+    </div>
+    <nav>
+      <a class="nav-link" id="backToProjectLink" href="#"><span class="ico">&#8592;</span> Back to project</a>
+      <div class="nav-group" style="margin-top:10px; border-top:1px solid rgba(255,255,255,0.08); padding-top:10px;">
+        <a class="nav-link" href="home.html"><span class="ico">&#8962;</span> Home</a>
+        <a class="nav-link" href="results.html"><span class="ico">&#9776;</span> Extraction Results</a>
+        <a class="nav-link active" href="workflow.html"><span class="ico">&#8635;</span> Workflow</a>
+      </div>
+    </nav>
+    <div class="sidebar-foot">
+      <a class="logout-link" href="#" onclick="logout('../../index.html'); return false;"><span class="ico">&#8630;</span> Sign out</a>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h2>End-to-End Workflow</h2>
+        <div class="crumbs">How a website turns into a curated location table</div>
+      </div>
+      <div class="user"><div class="avatar">U</div> Signed in</div>
+    </div>
+
+    <div class="content">
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-head">
+          <div>
+            <h3>Pipeline</h3>
+            <p>Five stages run in order for every extraction</p>
+          </div>
+        </div>
+        <div class="rail">
+          <div class="rail-step done">
+            <div class="line"></div>
+            <div class="node">&#127760;</div>
+            <div class="t">Frontend Website</div>
+            <div class="d">User selects a company site to extract from</div>
+          </div>
+          <div class="rail-step done">
+            <div class="line"></div>
+            <div class="node">&#129302;</div>
+            <div class="t">Copilot Agent</div>
+            <div class="d">Agent crawls the site and reads location pages</div>
+          </div>
+          <div class="rail-step done">
+            <div class="line"></div>
+            <div class="node">&#128269;</div>
+            <div class="t">Locate Candidates</div>
+            <div class="d">Names, addresses and phone numbers are identified</div>
+          </div>
+          <div class="rail-step">
+            <div class="line"></div>
+            <div class="node">&#9989;</div>
+            <div class="t">Publish Output</div>
+            <div class="d">Candidates are scored and written to the results table</div>
+          </div>
+          <div class="rail-step">
+            <div class="line"></div>
+            <div class="node">&#128202;</div>
+            <div class="t">Curated Table</div>
+            <div class="d">Reviewer verifies rows before export</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h3>Stage detail</h3>
+            <p>What happens at each step, and what the person controls</p>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Stage</th><th>Owner</th><th>What it does</th><th>Typical duration</th></tr></thead>
+          <tbody>
+            <tr><td>Frontend Website</td><td>You</td><td>Pick the target site from the Home page list</td><td>Instant</td></tr>
+            <tr><td>Copilot Agent</td><td>Agent</td><td>Crawls pages likely to contain location data</td><td>~30s per site</td></tr>
+            <tr><td>Locate Candidates</td><td>Agent</td><td>Extracts name, address, phone, and source URL</td><td>~10s per page</td></tr>
+            <tr><td>Publish Output</td><td>Agent</td><td>Writes rows to Extraction Results with a status</td><td>Instant</td></tr>
+            <tr><td>Curated Table</td><td>You</td><td>Review flagged rows and export the final CSV</td><td>Manual</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
