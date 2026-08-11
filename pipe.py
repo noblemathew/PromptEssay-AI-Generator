@@ -503,8 +503,24 @@ QUESTION_TEMPLATE = (
 )
 
 
+class TopicMismatch(ValueError):
+    """The file's topic column never matches the chosen technology."""
+
+    def __init__(self, topics, count):
+        self.topics = topics
+        self.count = count
+        ValueError.__init__(self, "No rows match that topic.")
+
+
 def norm_key(text):
     return re.sub(r"[^a-z0-9]", "", (text or "").lower())
+
+
+def topic_matches(cell, wanted):
+    a, b = norm_key(cell), norm_key(wanted)
+    if not a or not b:
+        return False
+    return a == b or (len(b) >= 2 and b in a) or (len(a) >= 3 and a in b)
 
 
 def col_to_index(ref):
@@ -573,7 +589,7 @@ def normalise_level(value):
     return None
 
 
-def load_questions_from_file(path, topic):
+def load_questions_from_file(path, topic, use_all=False):
     """Return (questions, topics_found). Raises ValueError with a readable message."""
     ext = os.path.splitext(path)[1].lower()
     if ext in (".xlsx", ".xlsm"):
@@ -624,13 +640,15 @@ def load_questions_from_file(path, topic):
             "qid": cell(row, "qid"),
         })
 
-    if "topic" in colmap and topics_found:
-        wanted = norm_key(topic)
-        picked = [q for q in raw if norm_key(q["topic"]) == wanted]
+    if not raw:
+        raise ValueError("No question rows were found in that file.")
+
+    if "topic" in colmap and topics_found and not use_all:
+        picked = [q for q in raw if topic_matches(q["topic"], topic)]
         if not picked:
-            raise ValueError(
-                "No rows in that file have the topic \"%s\".\n\nTopics in the file: %s"
-                % (topic, ", ".join(topics_found)))
+            # The column is probably holding sub-topics rather than the
+            # technology. Let the caller decide whether to take everything.
+            raise TopicMismatch(topics_found, len(raw))
     else:
         picked = raw
 
@@ -645,12 +663,14 @@ def load_questions_from_file(path, topic):
     picked.sort(key=lambda q: LEVEL_ORDER[q["level"]])
     out = []
     for i, q in enumerate(picked, start=1):
+        sub = q["topic"] if q["topic"] and not topic_matches(q["topic"], topic) else ""
         out.append({
             "qid": q["qid"] or "%s-%02d" % (norm_key(topic)[:3].upper() or "QST", i),
             "no": i,
             "level": q["level"],
             "question": q["question"],
             "expected": q["expected"],
+            "subtopic": sub,
         })
     return out, topics_found
 
@@ -1165,6 +1185,21 @@ class App(tk.Tk):
             return
         try:
             questions, topics = load_questions_from_file(path, topic)
+        except TopicMismatch as mm:
+            shown = ", ".join(mm.topics[:6]) + (" \u2026" if len(mm.topics) > 6 else "")
+            take_all = messagebox.askyesno(
+                "Topic column doesn't say %s" % topic,
+                "The Topic column in that file holds: %s\n\n"
+                "Those look like sub-topics rather than the technology.\n\n"
+                "Use all %d questions from the file for this %s interview?"
+                % (shown, mm.count, topic))
+            if not take_all:
+                return
+            try:
+                questions, topics = load_questions_from_file(path, topic, use_all=True)
+            except Exception as exc:
+                messagebox.showwarning("Could not read that file", str(exc))
+                return
         except ValueError as exc:
             messagebox.showwarning("Could not read that file", str(exc))
             return
@@ -1180,9 +1215,12 @@ class App(tk.Tk):
         note = "Loaded %d %s question%s from %s." % (
             len(questions), topic, "" if len(questions) == 1 else "s",
             os.path.basename(path))
-        if topics and len(topics) > 1:
-            note += "  Other topics in the file: %s." % ", ".join(
-                t for t in topics if norm_key(t) != norm_key(topic))
+        others = [t for t in topics if not topic_matches(t, topic)]
+        subs = len([q for q in questions if q.get("subtopic")])
+        if subs:
+            note += "  Sub-topics from the file are kept with each question."
+        elif others:
+            note += "  Other topics left out: %s." % ", ".join(others[:6])
         self._apply_questions(questions, note)
         self.btn_load.set_text("Use built-in questions instead")
 
@@ -1363,8 +1401,10 @@ class App(tk.Tk):
         badge = tk.Label(top, text=q["level"].upper(), bg="#EDF4F3", fg=ACCENT_DK,
                          font=font(8, "bold"), padx=9, pady=3)
         badge.pack(side="left", padx=12)
-        tk.Label(top, text="%s  \u00b7  %s" % (self.data["topic"], q["qid"]), bg=SURFACE,
-                 fg=FAINT, font=font(9, "normal", "mono")).pack(side="right")
+        crumb = "  \u00b7  ".join(x for x in (self.data["topic"], q.get("subtopic"),
+                                             q["qid"]) if x)
+        tk.Label(top, text=crumb, bg=SURFACE, fg=FAINT,
+                 font=font(9, "normal", "mono")).pack(side="right")
 
         tk.Label(c, text=q["question"], bg=SURFACE, fg=INK, font=font(15, "bold", "display"),
                  wraplength=660, justify="left").pack(anchor="w", pady=(16, 16))
@@ -1800,6 +1840,8 @@ class App(tk.Tk):
         for i, q in enumerate(self.data["questions"]):
             r = self.data["responses"].get(i, {})
             L("Q%d (%s)" % (i + 1, q["level"]), bold=True)
+            if q.get("subtopic"):
+                L("Sub-topic: %s" % q["subtopic"])
             L("Question: %s" % q["question"])
             L("Expected answer: %s" % q["expected"])
             if r.get("skipped"):
