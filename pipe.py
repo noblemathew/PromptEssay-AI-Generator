@@ -1712,19 +1712,38 @@ class App(tk.Tk):
         for f in files:
             tk.Label(c, text="\u2022   " + os.path.basename(f), bg=SURFACE, fg=INK,
                      font=font(10)).pack(anchor="w", pady=1)
+        tk.Label(c, text="Next candidate keeps the team, role, grade, requisition ID and "
+                         "your name. A fresh interview ID is issued.",
+                 bg=SURFACE, fg=FAINT, font=font(9), wraplength=820,
+                 justify="left").pack(anchor="w", pady=(22, 10))
+
         row = tk.Frame(c, bg=SURFACE)
-        row.pack(anchor="w", pady=(24, 0))
+        row.pack(anchor="w", pady=(2, 0))
         Button(row, "Open folder", lambda: open_folder(folder), kind="primary").pack(side="left")
-        Button(row, "New interview", self._new_interview,
-               kind="ghost").pack(side="left", padx=10)
+        Button(row, "Next candidate", self._new_interview,
+               kind="dark").pack(side="left", padx=10)
+        Button(row, "Exit", self._exit, kind="ghost").pack(side="left")
 
     def _new_interview(self):
-        if not messagebox.askyesno("Start a new interview",
-                                   "Clear this interview and start a new one?"):
+        if not messagebox.askyesno(
+                "Next candidate",
+                "Clear this interview and set up the next one?\n\n"
+                "The documents already saved are not affected."):
             return
+        old = dict(self.data.get("candidate") or {})
+        now = datetime.now()
+        keep = {k: old.get(k, "") for k in ("team", "role", "grade", "req", "interviewer")}
+        keep["date"] = now.strftime("%d %b %Y")
+        keep["time"] = now.strftime("%I:%M %p").lstrip("0")
         self.reset_data()
+        self.data["candidate"] = keep
         self._set_id_chip()
         self.show_setup()
+
+    def _exit(self):
+        if messagebox.askyesno("Close Interview Assistant",
+                               "Close the app?\n\nAnything not yet generated is lost."):
+            self.destroy()
 
     # ==================================================================
     # Documents
