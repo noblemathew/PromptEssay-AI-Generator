@@ -1,8 +1,0 @@
-Candidate ID: @{triggerBody()['text']}
-Candidate Name: @{outputs('Compose_-_Candidate_Name')}
-
-=== TEAMS TRANSCRIPT (interview conversation) ===
-@{base64ToString(body('Get_file_content_-_Teams')?['$content'])}
-
-=== INTERVIEWER MARKING SHEET (marks and comments) ===
-@{base64ToString(body('Get_file_content_-_Interviewer')?['$content'])}
