@@ -1,0 +1,34 @@
+{
+  "type": "object",
+  "properties": {
+    "candidateName": { "type": "string" },
+    "candidateId": { "type": "string" },
+    "role": { "type": "string" },
+    "interviewDate": { "type": "string" },
+    "totalScore": { "type": "number" },
+    "maxScore": { "type": "number" },
+    "percentage": { "type": "number" },
+    "recommendation": { "type": "string" },
+    "summary": { "type": "string" },
+    "strengths": { "type": "array", "items": { "type": "string" } },
+    "improvements": { "type": "array", "items": { "type": "string" } },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "questionNo": { "type": "number" },
+          "question": { "type": "string" },
+          "candidateAnswer": { "type": "string" },
+          "idealAnswer": { "type": "string" },
+          "interviewerMark": { "type": "number" },
+          "maxMark": { "type": "number" },
+          "agentMark": { "type": "number" },
+          "verdict": { "type": "string" },
+          "interviewerComment": { "type": "string" },
+          "agentComment": { "type": "string" }
+        }
+      }
+    }
+  }
+}
